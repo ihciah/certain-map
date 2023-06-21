@@ -1,0 +1,3 @@
+[workspace]
+members = ["certain-map", "certain-map-macros"]
+resolver = "2"
