@@ -1,7 +1,10 @@
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{quote, quote_spanned, ToTokens};
-use syn::{parse, parse::Parse, Attribute, Field, Ident, ItemStruct, Result, Type, Visibility};
+use syn::{
+    parse, parse::Parse, punctuated::Punctuated, Attribute, Field, Ident, ItemStruct, Meta, Result,
+    Token, Type, Visibility,
+};
 
 #[proc_macro]
 pub fn certain_map(input: TokenStream) -> TokenStream {
@@ -19,6 +22,7 @@ struct CMap {
     vis: Visibility,
     ident: Ident,
     fields: Vec<Field>,
+    fields_meta: Vec<Option<Punctuated<Meta, Token![,]>>>,
 
     span: Span,
 }
@@ -49,11 +53,39 @@ impl Parse for CMap {
             ));
         }
 
+        let mut fields_meta = Vec::with_capacity(fields.len());
+        for field in fields.iter() {
+            let maybe_meta = if let Some(attr) = field.attrs.first() {
+                if !attr.path().is_ident("ensure") {
+                    return Err(syn::Error::new(
+                        span,
+                        "fields attr now only support #[ensure(Clone)]",
+                    ));
+                }
+                let nested =
+                    attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
+                if nested
+                    .iter()
+                    .any(|meta| !matches!(meta, Meta::Path(path) if path.is_ident("Clone")))
+                {
+                    return Err(syn::Error::new(
+                        span,
+                        "fields attr now only support #[ensure(Clone)]",
+                    ));
+                }
+                Some(nested)
+            } else {
+                None
+            };
+            fields_meta.push(maybe_meta);
+        }
+
         Ok(CMap {
             attrs: definition.attrs,
             vis: definition.vis,
             ident: definition.ident,
             fields,
+            fields_meta,
             span,
         })
     }
@@ -116,7 +148,7 @@ impl ToTokens for CMap {
             let generic_types_replaced = ReplaceIter::new(generic_types.iter(), idx, &occupied);
             tokens.extend(quote_spanned! {
                 self.span =>
-                    impl<#(#generic_types_ignored),*> certain_map::ParamRef<#ty> for #ident<#(#generic_types_replaced),*> {
+                    impl<#(#generic_types_ignored),*> ::certain_map::ParamRef<#ty> for #ident<#(#generic_types_replaced),*> {
                         #[inline]
                         fn param_ref(&self) -> &#ty {
                             &self.#name.0
@@ -125,7 +157,53 @@ impl ToTokens for CMap {
             });
         }
 
-        // impl Set
+        // impl ParamMut
+        for (idx, field) in self.fields.iter().enumerate() {
+            let ty = &field.ty;
+            let name = field.ident.as_ref().unwrap();
+            let generic_types_ignored = IgnoreIter::new(generic_types.iter(), idx);
+            let occupied = IdentOrTokens::from(occupied_type(ty));
+            let generic_types_replaced = ReplaceIter::new(generic_types.iter(), idx, &occupied);
+            tokens.extend(quote_spanned! {
+                self.span =>
+                    impl<#(#generic_types_ignored),*> ::certain_map::ParamMut<#ty> for #ident<#(#generic_types_replaced),*> {
+                        #[inline]
+                        fn param_mut(&mut self) -> &mut #ty {
+                            &mut self.#name.0
+                        }
+                    }
+            });
+        }
+
+        // impl Param if #[ensure(Clone)]
+        for (idx, (field, maybe_meta)) in
+            self.fields.iter().zip(self.fields_meta.iter()).enumerate()
+        {
+            if maybe_meta
+                .iter()
+                .flat_map(|x| x.iter())
+                .any(|meta| matches!(meta, Meta::Path(path) if path.is_ident("Clone")))
+            {
+                let ty = &field.ty;
+                let name = field.ident.as_ref().unwrap();
+
+                let generic_types_ignored = IgnoreIter::new(generic_types.iter(), idx);
+                let occupied = IdentOrTokens::from(occupied_type(ty));
+                let generic_types_replaced = ReplaceIter::new(generic_types.iter(), idx, &occupied);
+                tokens.extend(quote_spanned! {
+                self.span =>
+                    impl<#(#generic_types_ignored),*> ::certain_map::Param<#ty> for #ident<#(#generic_types_replaced),*> {
+                        #[inline]
+                        fn param(&self) -> #ty {
+                            #[allow(clippy::clone_on_copy)]
+                            self.#name.0.clone()
+                        }
+                    }
+                });
+            }
+        }
+
+        // impl ParamSet
         for (idx, field) in self.fields.iter().enumerate() {
             let ty = &field.ty;
             let name = field.ident.as_ref().unwrap();
@@ -142,7 +220,8 @@ impl ToTokens for CMap {
                 impl<#(#generic_types),*> ::certain_map::ParamSet<#ty> for #ident<#(#generic_types),*> {
                     type Transformed = #ident<#(#generic_types_replaced),*>;
 
-                    fn set(self, item: #ty) -> Self::Transformed {
+                    #[inline]
+                    fn param_set(self, item: #ty) -> Self::Transformed {
                         #ident {
                             #(#assignations),*
                         }
@@ -151,7 +230,7 @@ impl ToTokens for CMap {
             });
         }
 
-        // impl Remove
+        // impl ParamRemove
         for (idx, field) in self.fields.iter().enumerate() {
             let ty = &field.ty;
             let name = field.ident.as_ref().unwrap();
@@ -168,10 +247,46 @@ impl ToTokens for CMap {
                 impl<#(#generic_types),*> ::certain_map::ParamRemove<#ty> for #ident<#(#generic_types),*> {
                     type Transformed = #ident<#(#generic_types_replaced),*>;
 
-                    fn remove(self) -> Self::Transformed {
+                    #[inline]
+                    fn param_remove(self) -> Self::Transformed {
                         #ident {
                             #(#assignations),*
                         }
+                    }
+                }
+            });
+        }
+
+        // impl ParamTake
+        for (idx, field) in self.fields.iter().enumerate() {
+            let ty = &field.ty;
+            let name = field.ident.as_ref().unwrap();
+            let generic_types_ignored = IgnoreIter::new(generic_types.iter(), idx);
+            let occupied = IdentOrTokens::from(occupied_type(ty));
+            let generic_types_replaced = ReplaceIter::new(generic_types.iter(), idx, &occupied);
+
+            let vacancy = IdentOrTokens::from(vacancy_type());
+            let generic_types_replaced_transformed =
+                ReplaceIter::new(generic_types.iter(), idx, &vacancy);
+            let direct_assign = quote!(#name: ::certain_map::Vacancy);
+            let assignations = ReplaceIter::new(
+                names.iter().map(|&name| quote!(#name: self.#name)),
+                idx,
+                direct_assign,
+            );
+            let removed_name = names[idx];
+            let removed = quote!(self.#removed_name);
+            tokens.extend(quote_spanned! {
+                self.span =>
+                impl<#(#generic_types_ignored),*> ::certain_map::ParamTake<#ty> for #ident<#(#generic_types_replaced),*> {
+                    type Transformed = #ident<#(#generic_types_replaced_transformed),*>;
+
+                    #[inline]
+                    fn param_take(self) -> (Self::Transformed, #ty) {
+                        let after_remove = #ident {
+                            #(#assignations),*
+                        };
+                        (after_remove, #removed.0)
                     }
                 }
             });
