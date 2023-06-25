@@ -139,7 +139,7 @@ impl ToTokens for CMap {
                 }
         });
 
-        // impl ParamRef
+        // impl ParamRef<T>
         for (idx, field) in self.fields.iter().enumerate() {
             let ty = &field.ty;
             let name = field.ident.as_ref().unwrap();
@@ -152,6 +152,41 @@ impl ToTokens for CMap {
                         #[inline]
                         fn param_ref(&self) -> &#ty {
                             &self.#name.0
+                        }
+                    }
+            });
+        }
+
+        // impl ParamMaybeRef<T> for occupied
+        for (idx, field) in self.fields.iter().enumerate() {
+            let ty = &field.ty;
+            let name = field.ident.as_ref().unwrap();
+            let generic_types_ignored = IgnoreIter::new(generic_types.iter(), idx);
+            let occupied = IdentOrTokens::from(occupied_type(ty));
+            let generic_types_replaced = ReplaceIter::new(generic_types.iter(), idx, &occupied);
+            tokens.extend(quote_spanned! {
+                self.span =>
+                    impl<#(#generic_types_ignored),*> ::certain_map::ParamMaybeRef<#ty> for #ident<#(#generic_types_replaced),*> {
+                        #[inline]
+                        fn param_maybe_ref(&self) -> Option<&#ty> {
+                            Some(&self.#name.0)
+                        }
+                    }
+            });
+        }
+
+        // impl ParamMaybeRef<T> for vacancy
+        for (idx, field) in self.fields.iter().enumerate() {
+            let ty = &field.ty;
+            let generic_types_ignored = IgnoreIter::new(generic_types.iter(), idx);
+            let vacancy = IdentOrTokens::from(vacancy_type());
+            let generic_types_replaced = ReplaceIter::new(generic_types.iter(), idx, &vacancy);
+            tokens.extend(quote_spanned! {
+                self.span =>
+                    impl<#(#generic_types_ignored),*> ::certain_map::ParamMaybeRef<#ty> for #ident<#(#generic_types_replaced),*> {
+                        #[inline]
+                        fn param_maybe_ref(&self) -> Option<&#ty> {
+                            None
                         }
                     }
             });
@@ -175,7 +210,42 @@ impl ToTokens for CMap {
             });
         }
 
-        // impl Param if #[ensure(Clone)]
+        // impl ParamMaybeMut<T> for occupied
+        for (idx, field) in self.fields.iter().enumerate() {
+            let ty = &field.ty;
+            let name = field.ident.as_ref().unwrap();
+            let generic_types_ignored = IgnoreIter::new(generic_types.iter(), idx);
+            let occupied = IdentOrTokens::from(occupied_type(ty));
+            let generic_types_replaced = ReplaceIter::new(generic_types.iter(), idx, &occupied);
+            tokens.extend(quote_spanned! {
+                self.span =>
+                    impl<#(#generic_types_ignored),*> ::certain_map::ParamMaybeMut<#ty> for #ident<#(#generic_types_replaced),*> {
+                        #[inline]
+                        fn param_maybe_mut(&mut self) -> Option<&mut #ty> {
+                            Some(&mut self.#name.0)
+                        }
+                    }
+            });
+        }
+
+        // impl ParamMaybeMut<T> for vacancy
+        for (idx, field) in self.fields.iter().enumerate() {
+            let ty = &field.ty;
+            let generic_types_ignored = IgnoreIter::new(generic_types.iter(), idx);
+            let vacancy = IdentOrTokens::from(vacancy_type());
+            let generic_types_replaced = ReplaceIter::new(generic_types.iter(), idx, &vacancy);
+            tokens.extend(quote_spanned! {
+                self.span =>
+                    impl<#(#generic_types_ignored),*> ::certain_map::ParamMaybeMut<#ty> for #ident<#(#generic_types_replaced),*> {
+                        #[inline]
+                        fn param_maybe_mut(&mut self) -> Option<&mut #ty> {
+                            None
+                        }
+                    }
+            });
+        }
+
+        // impl Param<T> and Param<Option<T>> if #[ensure(Clone)]
         for (idx, (field, maybe_meta)) in
             self.fields.iter().zip(self.fields_meta.iter()).enumerate()
         {
@@ -186,17 +256,38 @@ impl ToTokens for CMap {
             {
                 let ty = &field.ty;
                 let name = field.ident.as_ref().unwrap();
+                let occupied = IdentOrTokens::from(occupied_type(ty));
+                let vacancy = IdentOrTokens::from(vacancy_type());
 
                 let generic_types_ignored = IgnoreIter::new(generic_types.iter(), idx);
-                let occupied = IdentOrTokens::from(occupied_type(ty));
-                let generic_types_replaced = ReplaceIter::new(generic_types.iter(), idx, &occupied);
+                let generic_types_occupied = ReplaceIter::new(generic_types.iter(), idx, &occupied);
+
+                let generic_types_ignored2 = IgnoreIter::new(generic_types.iter(), idx);
+                let generic_types_occupied2 =
+                    ReplaceIter::new(generic_types.iter(), idx, &occupied);
+
+                let generic_types_ignored3 = IgnoreIter::new(generic_types.iter(), idx);
+                let generic_types_vacancy = ReplaceIter::new(generic_types.iter(), idx, &vacancy);
                 tokens.extend(quote_spanned! {
                 self.span =>
-                    impl<#(#generic_types_ignored),*> ::certain_map::Param<#ty> for #ident<#(#generic_types_replaced),*> {
+                    impl<#(#generic_types_ignored),*> ::certain_map::Param<#ty> for #ident<#(#generic_types_occupied),*> {
                         #[inline]
                         fn param(&self) -> #ty {
                             #[allow(clippy::clone_on_copy)]
                             self.#name.0.clone()
+                        }
+                    }
+                    impl<#(#generic_types_ignored2),*> ::certain_map::Param<Option<#ty>> for #ident<#(#generic_types_occupied2),*> {
+                        #[inline]
+                        fn param(&self) -> Option<#ty> {
+                            #[allow(clippy::clone_on_copy)]
+                            Some(self.#name.0.clone())
+                        }
+                    }
+                    impl<#(#generic_types_ignored3),*> ::certain_map::Param<Option<#ty>> for #ident<#(#generic_types_vacancy),*> {
+                        #[inline]
+                        fn param(&self) -> Option<#ty> {
+                            None
                         }
                     }
                 });
