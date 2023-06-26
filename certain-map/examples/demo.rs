@@ -6,6 +6,7 @@ struct UserName(String);
 struct UserAge(u8);
 
 certain_map! {
+    #[default(MyCertainMapEmpty)]
     pub struct MyCertainMap {
         name: UserName,
         #[ensure(Clone)]
@@ -15,6 +16,9 @@ certain_map! {
 
 fn main() {
     let meta = MyCertainMap::new();
+
+    // With #[default(MyCertainMapEmpty)] we can get an empty type.
+    assert_type::<MyCertainMapEmpty>(&meta);
 
     // The following line compiles fail since there's no UserName in the map.
     // log_username(&meta);
@@ -43,3 +47,5 @@ fn log_username<T: ParamRef<UserName>>(meta: &T) {
 fn log_age<T: Param<UserAge>>(meta: &T) {
     println!("user age: {}", meta.param().0);
 }
+
+fn assert_type<T>(_: &T) {}

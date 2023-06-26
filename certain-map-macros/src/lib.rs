@@ -93,7 +93,7 @@ impl Parse for CMap {
 
 impl ToTokens for CMap {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let attrs = &self.attrs;
+        let mut attrs = self.attrs.clone();
         let vis = &self.vis;
         let ident = &self.ident;
         let generic_types: Vec<_> = (0..self.fields.len())
@@ -107,6 +107,28 @@ impl ToTokens for CMap {
             .collect();
 
         // struct definition
+        let mut default = None;
+        for (idx, attr) in attrs.iter().enumerate() {
+            if !attr.path().is_ident("default") {
+                continue;
+            }
+            if let Ok(Meta::Path(path)) = attr.parse_args::<Meta>() {
+                if let Some(path) = path.get_ident() {
+                    default = Some((idx, path.clone()));
+                    break;
+                }
+            }
+        }
+        if let Some((def_idx, def_ident)) = default {
+            attrs.remove(def_idx);
+            let vacancy_types =
+                std::iter::repeat(quote!(::certain_map::Vacancy)).take(self.fields.len());
+            tokens.extend(quote_spanned! {
+                self.span =>
+                    #vis type #def_ident = #ident<#(#vacancy_types),*>;
+            });
+        }
+
         tokens.extend(quote_spanned! {
             self.span =>
                 #(#attrs)*
