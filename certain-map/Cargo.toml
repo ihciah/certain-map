@@ -1,6 +1,6 @@
 [package]
 name = "certain-map"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 
 authors = ["ChiHai <ihciah@gmail.com>"]
@@ -13,4 +13,4 @@ repository = "https://github.com/ihciah/certain-map"
 
 [dependencies]
 certain-map-macros = { version = "0.2.2", path = "../certain-map-macros" }
-service-async = { version = "0.1.4" }
+param = { version = "0.1.0" }

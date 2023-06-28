@@ -1,7 +1,7 @@
 /// Re-export macro.
 pub use certain_map_macros::certain_map;
-/// We use service_async's Param*.
-pub use service_async::{
+/// We use param's Param*.
+pub use param::{
     Param, ParamMaybeMut, ParamMaybeRef, ParamMut, ParamRef, ParamRemove, ParamSet, ParamTake,
 };
 
