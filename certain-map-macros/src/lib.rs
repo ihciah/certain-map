@@ -109,7 +109,8 @@ impl ToTokens for CMap {
         // struct definition
         let mut default = None;
         for (idx, attr) in attrs.iter().enumerate() {
-            if !attr.path().is_ident("default") {
+            // `default` is deprecated.
+            if !attr.path().is_ident("default") && !attr.path().is_ident("empty") {
                 continue;
             }
             if let Ok(Meta::Path(path)) = attr.parse_args::<Meta>() {
@@ -126,6 +127,27 @@ impl ToTokens for CMap {
             tokens.extend(quote_spanned! {
                 self.span =>
                     #vis type #def_ident = #ident<#(#vacancy_types),*>;
+            });
+        }
+
+        let mut full = None;
+        for (idx, attr) in attrs.iter().enumerate() {
+            if !attr.path().is_ident("full") {
+                continue;
+            }
+            if let Ok(Meta::Path(path)) = attr.parse_args::<Meta>() {
+                if let Some(path) = path.get_ident() {
+                    full = Some((idx, path.clone()));
+                    break;
+                }
+            }
+        }
+        if let Some((full_idx, full_ident)) = full {
+            attrs.remove(full_idx);
+            let occupied_types = self.fields.iter().map(|f| occupied_type(&f.ty));
+            tokens.extend(quote_spanned! {
+                self.span =>
+                    #vis type #full_ident = #ident<#(#occupied_types),*>;
             });
         }
 

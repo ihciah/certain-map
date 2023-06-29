@@ -1,12 +1,13 @@
 use certain_map::{certain_map, Param, ParamRef, ParamRemove, ParamSet, ParamTake};
 
-struct UserName(String);
+pub struct UserName(String);
 
 #[derive(Copy, Clone)]
-struct UserAge(u8);
+pub struct UserAge(u8);
 
 certain_map! {
-    #[default(MyCertainMapEmpty)]
+    #[empty(MyCertainMapEmpty)]
+    #[full(MyCertainMapFull)]
     pub struct MyCertainMap {
         name: UserName,
         #[ensure(Clone)]
