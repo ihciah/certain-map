@@ -1,27 +1,52 @@
 # Certain Map
 [![Crates.io](https://img.shields.io/crates/v/certain-map.svg)](https://crates.io/crates/certain-map)
 
-A typed map which can make sure item exist.
+A typed map that ensures the existence of an item.
 
 ## What Problem Does It Solve
-In Rust, we often use Service abstraction for modular structure design(for example [tower-service](https://crates.io/crates/tower-service) or [service-async](https://github.com/ihciah/service-async)).
+In Rust, Service abstractions are commonly used for modular structure design, for example [tower-service](https://crates.io/crates/tower-service) or [service-async](https://github.com/ihciah/service-async). Services are layered, and the Request/Response types may vary across different layers. When components across layers have data dependencies, particularly indirect ones, passing all required information by modifying the Request/Response type becomes challenging. If the number of variables to be passed fluctuates, we must redefine a struct to accommodate these changes. This requires implementing conversion functions and data extraction functions for these structs, which can be tedious and can clutter the code. Typically, we avoid this by using HashMap or TypeMap to manage information that needs to be passed across Services.
 
-Services are stacked, and the Request/Response types of different layers may be different.
+However, this approach has a significant drawback: we cannot ensure at compile time that the key-value pair required by subsequent components has been set when it is read. This can lead to unnecessary error handling branches in our program or panic in certain scenarios. This crate transforms the struct type when keys are inserted or removed, ensuring the existence of some values at compile-time.
 
-When components in different layers have data dependencies, especially indirect dependencies, it becomes difficult to pass all the required information by changing the Request/Response type.
+If you need to pass information between multiple stages using a structure, this crate is ideal for you.
 
-When the number of variables to be passed increases or decreases, we must redefine a struct to load these quantities, and need to implement conversion functions and data extraction functions for these structs. This will be a huge and boring job, and it will also make the code become Dirtier.
+It upholds the promise: if it compiles, it works.
 
-So usually we don't do this, we often use HashMap or TypeMap to manage the information that needs to be passed across Services.
+## Internal workings
+```rust
+pub type EmptyContext = Context<::certain_map::Vacancy, ::certain_map::Vacancy>;
+pub type FullContext =
+    Context<::certain_map::Occupied<PeerAddr>, ::certain_map::Occupied<Option<RemoteAddr>>>;
+#[derive(Debug, Clone)]
+pub struct Context<_CMT_0, _CMT_1> {
+    peer_addr: _CMT_0,
+    remote_addr: _CMT_1,
+}
 
-But this will bring an obvious problem: we cannot ensure at compile time that the key-value required by subsequent components has been set when it is read. This can lead to unreasonable error handling branches in our program or panic in some scenarios.
+// `ParamSet for PeerAddr will not compile if it has 
+// been previously set.
+impl<_CMT_0, _CMT_1> ::certain_map::ParamSet<PeerAddr> for Context<_CMT_0, _CMT_1> {
+    type Transformed = Context<::certain_map::Occupied<PeerAddr>, _CMT_1>;
+    #[inline]
+    fn param_set(self, item: PeerAddr) -> Self::Transformed {
+        Context {
+            peer_addr: ::certain_map::Occupied(item),
+            remote_addr: self.remote_addr,
+        }
+    }
+}
 
-## What Benifits
-In this crate, we transform struct type when keys inserted or removed. So we can makes sure some value must exist at compile-time.
-
-When you need to use a structure to pass information between multiple stages, this crate will be most suitable for you.
-
-This re-fulfills the promise: if it compiles, it works.
+// `ParamRef<PeerAddr>` trait bound will not compile for maps
+// where it hasn't been set with `ParamSet<PeerAdr>.
+impl<_CMT_1> ::certain_map::ParamRef<PeerAddr>
+    for Context<::certain_map::Occupied<PeerAddr>, _CMT_1>
+{
+    #[inline]
+    fn param_ref(&self) -> &PeerAddr {
+        &self.peer_addr.0
+    }
+}
+```
 
 ## Usage
 ```rust
@@ -43,7 +68,7 @@ certain_map! {
 fn main() {
     let meta = MyCertainMap::new();
 
-    // The following line compiles fail since there's no UserName in the map.
+    // The following line fails to compile since there's no UserName in the map.
     // log_username(&meta);
 
     let meta = meta.param_set(UserName("ihciah".to_string()));
@@ -52,14 +77,14 @@ fn main() {
 
     let (meta, removed) = ParamTake::<UserName>::param_take(meta);
     assert_eq!(removed.0, "ihciah");
-    // The following line compiles fail since the UserName is removed.
+    // The following line fails to compile since the UserName is removed.
     // log_username(&meta);
 
     // We can also remove a type no matter if it exist.
     let meta = ParamRemove::<UserName>::param_remove(meta);
 
     let meta = meta.param_set(UserAge(24));
-    // we can get ownership of fields with #[ensure(Clone)]
+    // We can get ownership of fields with #[ensure(Clone)]
     log_age(&meta);
 }
 
