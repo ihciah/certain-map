@@ -1,7 +1,9 @@
 # Certain Map
 [![Crates.io](https://img.shields.io/crates/v/certain-map.svg)](https://crates.io/crates/certain-map)
 
-A typed map that ensures the existence of an item.
+> 0.3 is published! It has a new style: "prefilled". This style is more efficient and more flexible. See [migration guide](docs/v2-to-v3-mig.md) for more details.
+
+A typed map that ensures the existence of an item(but it is not a map internally, in fact it is a generated struct).
 
 ## What Problem Does It Solve
 In Rust, Service abstractions are commonly used for modular structure design, for example [tower-service](https://crates.io/crates/tower-service) or [service-async](https://github.com/ihciah/service-async). Services are layered, and the Request/Response types may vary across different layers. When components across layers have data dependencies, particularly indirect ones, passing all required information by modifying the Request/Response type becomes challenging. If the number of variables to be passed fluctuates, we must redefine a struct to accommodate these changes. This requires implementing conversion functions and data extraction functions for these structs, which can be tedious and can clutter the code. Typically, we avoid this by using HashMap or TypeMap to manage information that needs to be passed across Services.
@@ -12,7 +14,9 @@ If you need to pass information between multiple stages using a structure, this 
 
 It upholds the promise: if it compiles, it works.
 
-## Internal workings
+## Internal workings(v0.2 version)
+> For 0.3 version, see [migration guide](docs/v2-to-v3-mig.md).
+
 ```rust
 pub type EmptyContext = Context<::certain_map::Vacancy, ::certain_map::Vacancy>;
 pub type FullContext =
@@ -23,7 +27,7 @@ pub struct Context<_CMT_0, _CMT_1> {
     remote_addr: _CMT_1,
 }
 
-// `ParamSet for PeerAddr will not compile if it has 
+// `ParamSet for PeerAddr will not compile if it has
 // been previously set.
 impl<_CMT_0, _CMT_1> ::certain_map::ParamSet<PeerAddr> for Context<_CMT_0, _CMT_1> {
     type Transformed = Context<::certain_map::Occupied<PeerAddr>, _CMT_1>;
@@ -48,7 +52,9 @@ impl<_CMT_1> ::certain_map::ParamRef<PeerAddr>
 }
 ```
 
-## Usage
+## Usage(v0.2 version)
+> For 0.3 version, see [migration guide](docs/v2-to-v3-mig.md) and [prefilled example](examples/demo_prefilled.rs).
+
 ```rust
 use certain_map::{certain_map, Param, ParamRef, ParamRemove, ParamSet, ParamTake};
 
