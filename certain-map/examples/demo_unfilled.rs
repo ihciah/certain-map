@@ -1,3 +1,8 @@
+// Copyright 2024 ihciah. All Rights Reserved.
+
+//! I don't recommend using this style since it may bring more stack copying cost.
+//! Please use prefilled style if possible.
+
 use certain_map::{certain_map, Param, ParamRef, ParamRemove, ParamSet, ParamTake};
 
 #[derive(Clone)]

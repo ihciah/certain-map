@@ -1,7 +1,7 @@
 # Certain Map
 [![Crates.io](https://img.shields.io/crates/v/certain-map.svg)](https://crates.io/crates/certain-map)
 
-> 0.3 is published! It has a new style: "prefilled". This style is more efficient and more flexible. See [migration guide](docs/v2-to-v3-mig.md) for more details.
+> 0.3 is published! It has a new style: "prefilled". This style is more efficient and more flexible. See [migration guide](../docs/v2-to-v3-mig.md) for more details.
 
 A typed map that ensures the existence of an item(but it is not a map internally, in fact it is a generated struct).
 
@@ -10,12 +10,12 @@ In Rust, Service abstractions are commonly used for modular structure design, fo
 
 However, this approach has a significant drawback: we cannot ensure at compile time that the key-value pair required by subsequent components has been set when it is read. This can lead to unnecessary error handling branches in our program or panic in certain scenarios. This crate transforms the struct type when keys are inserted or removed, ensuring the existence of some values at compile-time.
 
-If you need to pass information between multiple stages using a structure, this crate is ideal for you.
+If you need to pass information between multiple stages using a structure, this crate is ideal for you. To pass information across multiple `Services`, please checkout the [service demo](examples/demo_prefilled_service.rs).
 
 It upholds the promise: if it compiles, it works.
 
 ## Internal workings(v0.2 version)
-> For 0.3 version, see [migration guide](docs/v2-to-v3-mig.md).
+> For 0.3 version, see [migration guide](../docs/v2-to-v3-mig.md).
 
 ```rust
 pub type EmptyContext = Context<::certain_map::Vacancy, ::certain_map::Vacancy>;
@@ -53,7 +53,7 @@ impl<_CMT_1> ::certain_map::ParamRef<PeerAddr>
 ```
 
 ## Usage(v0.2 version)
-> For 0.3 version, see [migration guide](docs/v2-to-v3-mig.md) and [prefilled example](examples/demo_prefilled.rs).
+> For 0.3 version, see [migration guide](../docs/v2-to-v3-mig.md) and [prefilled example](examples/demo_prefilled.rs).
 
 ```rust
 use certain_map::{certain_map, Param, ParamRef, ParamRemove, ParamSet, ParamTake};

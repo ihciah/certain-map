@@ -10,7 +10,7 @@ In Rust, Service abstractions are commonly used for modular structure design, fo
 
 However, this approach has a significant drawback: we cannot ensure at compile time that the key-value pair required by subsequent components has been set when it is read. This can lead to unnecessary error handling branches in our program or panic in certain scenarios. This crate transforms the struct type when keys are inserted or removed, ensuring the existence of some values at compile-time.
 
-If you need to pass information between multiple stages using a structure, this crate is ideal for you.
+If you need to pass information between multiple stages using a structure, this crate is ideal for you. To pass information across multiple `Services`, please checkout the [service demo](certain-map/examples/demo_prefilled_service.rs).
 
 It upholds the promise: if it compiles, it works.
 

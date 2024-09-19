@@ -1,3 +1,5 @@
+// Copyright 2024 ihciah. All Rights Reserved.
+
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{quote, quote_spanned, ToTokens};
@@ -192,12 +194,12 @@ impl CMap {
         let clone_with = if derive_clone {
             quote_spanned! {
                 self.span =>
-                    fn clone_with<#(#generic_types),*>(&self, _state: &#state_ident<#(#generic_types),*>) -> Self
+                    unsafe fn clone_with<#(#generic_types),*>(&self, _state: &#state_ident<#(#generic_types),*>) -> Self
                     where
                         #(#generic_types: ::certain_map::MaybeAvailable,)*
                     {
                         Self {
-                            #(#names: unsafe { #generic_types::do_clone(&self.#names) },)*
+                            #(#names: #generic_types::do_clone(&self.#names),)*
                         }
                     }
             }
@@ -207,6 +209,8 @@ impl CMap {
 
         // impl #ident
         let vacancy_types =
+            std::iter::repeat(quote!(::certain_map::Vacancy)).take(self.fields.len());
+        let vacancy_types2 =
             std::iter::repeat(quote!(::certain_map::Vacancy)).take(self.fields.len());
         tokens.extend(quote_spanned! {
             self.span =>
@@ -225,6 +229,15 @@ impl CMap {
                         }
                     }
                     #clone_with
+                }
+                impl ::certain_map::Handler for #ident {
+                    type Hdr<'a> = #handler_ident<'a, #(#vacancy_types2),*>
+                    where
+                        Self: 'a;
+                    #[inline]
+                    fn handler(&mut self) -> Self::Hdr<'_> {
+                        self.handler()
+                    }
                 }
                 impl ::std::default::Default for #ident {
                     #[inline]
@@ -256,6 +269,16 @@ impl CMap {
                         }
                     }
                 }
+                impl<#(#generic_types),*> ::certain_map::Attach<#ident> for #state_ident<#(#generic_types),*>
+                where
+                    #(#generic_types: ::certain_map::MaybeAvailable,)*
+                {
+                    type Hdr<'a> = #handler_ident<'a, #(#generic_types),*>;
+                    #[inline]
+                    unsafe fn attach(self, store: &mut #ident) -> Self::Hdr<'_> {
+                        self.attach(store)
+                    }
+                }
         });
 
         if derive_clone {
@@ -268,8 +291,20 @@ impl CMap {
                     {
                         #[inline]
                         pub fn fork(&self) -> (#ident, #state_ident<#(#generic_types),*>) {
-                            let inner = self.inner.clone_with(&self.state);
+                            // Safety: we are sure about the state of the map.
+                            let inner = unsafe { self.inner.clone_with(&self.state) };
                             (inner, #state_ident::new())
+                        }
+                    }
+                    impl<'a, #(#generic_types),*> ::certain_map::Fork for #handler_ident<'a, #(#generic_types),*>
+                    where
+                        #(#generic_types: ::certain_map::MaybeAvailable,)*
+                    {
+                        type Store = #ident;
+                        type State = #state_ident<#(#generic_types),*>;
+                        #[inline]
+                        fn fork(&self) -> (Self::Store, Self::State) {
+                            self.fork()
                         }
                     }
             });

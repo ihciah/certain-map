@@ -1,6 +1,6 @@
 [package]
 name = "certain-map"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 
 authors = ["ChiHai <ihciah@gmail.com>"]
@@ -14,3 +14,6 @@ repository = "https://github.com/ihciah/certain-map"
 [dependencies]
 certain-map-macros = { version = "0.3.0", path = "../certain-map-macros" }
 param = { version = "0.1.0" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

@@ -1,3 +1,5 @@
+// Copyright 2024 ihciah. All Rights Reserved.
+
 use certain_map::{certain_map, Param, ParamRef, ParamRemove, ParamSet, ParamTake};
 
 #[derive(Clone)]

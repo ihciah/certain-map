@@ -1,3 +1,5 @@
+// Copyright 2024 ihciah. All Rights Reserved.
+
 #![doc = include_str!("../README.md")]
 
 use std::mem::MaybeUninit;
@@ -257,4 +259,26 @@ impl MaybeAvailable for Vacancy {
     ) -> std::fmt::Result {
         write!(f, "Vacancy")
     }
+}
+
+pub trait Handler {
+    type Hdr<'a>
+    where
+        Self: 'a;
+    fn handler(&mut self) -> Self::Hdr<'_>;
+}
+
+pub trait Fork {
+    type Store;
+    type State;
+    fn fork(&self) -> (Self::Store, Self::State);
+}
+
+pub trait Attach<Store> {
+    type Hdr<'a>
+    where
+        Store: 'a;
+    /// # Safety
+    /// The caller must make sure the attached map has the data of current state.
+    unsafe fn attach(self, store: &mut Store) -> Self::Hdr<'_>;
 }
