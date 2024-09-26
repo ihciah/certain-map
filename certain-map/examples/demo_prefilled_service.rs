@@ -5,9 +5,9 @@
 //! To pass information across service layers, and make it able to decouple the Context concrete
 //! type, we can use certain_map with param crate.
 
-use std::{convert::Infallible, future::Future, marker::PhantomData};
+use std::{convert::Infallible, future::Future, marker::PhantomData, ops::Add};
 
-use certain_map::Handler;
+use certain_map::{Attach, Fork, Handler};
 use certain_map_macros::certain_map;
 use param::{ParamRef, ParamSet};
 
@@ -112,15 +112,49 @@ impl<CXStore, T> CXSvc<CXStore, T> {
     }
 }
 
-impl<CXStore, T> CXSvc<CXStore, T> {
-    async fn call<R, RESP, ERR>(&self, num: R) -> Result<RESP, ERR>
-    where
-        CXStore: Handler + Default + 'static,
-        for<'a> T: Service<(R, CXStore::Hdr<'a>), Response = RESP, Error = ERR>,
-    {
+impl<CXStore, T, R, RESP, ERR> Service<R> for CXSvc<CXStore, T>
+where
+    CXStore: Handler + Default + 'static,
+    for<'a> T: Service<(R, CXStore::Hdr<'a>), Response = RESP, Error = ERR>,
+{
+    type Response = RESP;
+    type Error = ERR;
+
+    async fn call(&self, num: R) -> Result<Self::Response, Self::Error> {
         let mut store = CXStore::default();
         let hdr = store.handler();
         self.inner.call((num, hdr)).await
+    }
+}
+
+// A service that call inner twice and return the sum.
+// This is to show how to fork context.
+struct DupSvc<T>(T);
+
+impl<T, R, CXIn, CXStore, CXState, Resp, Err> Service<(R, CXIn)> for DupSvc<T>
+where
+    R: Copy,
+    Resp: Add<Output = Resp>,
+    CXIn: Fork<Store = CXStore, State = CXState>,
+    CXStore: 'static,
+    for<'a> CXState: Attach<CXStore>,
+    for<'a> T: Service<(R, <CXState as Attach<CXStore>>::Hdr<'a>), Response = Resp, Error = Err>,
+{
+    type Response = Resp;
+    type Error = Err;
+
+    async fn call(&self, (req, ctx): (R, CXIn)) -> Result<Self::Response, Self::Error> {
+        // fork ctx
+        let (mut store, state) = ctx.fork();
+        let forked_ctx = unsafe { state.attach(&mut store) };
+        let r1 = self.0.call((req, forked_ctx)).await?;
+
+        // fork ctx
+        let (mut store, state) = ctx.fork();
+        let forked_ctx = unsafe { state.attach(&mut store) };
+        let r2 = self.0.call((req, forked_ctx)).await?;
+
+        Ok(r1 + r2)
     }
 }
 
@@ -135,4 +169,9 @@ async fn main() {
     // You can even create a service to initialize store and pass the handler.
     let svc = CXSvc::<MyCertainMap, _>::new(svc);
     assert_eq!(svc.call(2).await.unwrap(), 6);
+
+    // To show how to fork ctx.
+    let svc = CXSvc::<MyCertainMap, _>::new(DupSvc(Add1(Mul2(Identical))));
+    // It is expected to print 2 times.
+    assert_eq!(svc.call(2).await.unwrap(), 12);
 }
