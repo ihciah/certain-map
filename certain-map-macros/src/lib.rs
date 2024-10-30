@@ -67,7 +67,7 @@ impl Parse for CMap {
         for (idx, attr) in definition.attrs.iter().enumerate() {
             if let Ok(name_val) = attr.meta.require_name_value() {
                 if name_val.path.is_ident("style")
-                    && matches!(&name_val.value, Expr::Lit(ExprLit{lit: Lit::Str(l), ..}) if l.value().to_ascii_lowercase() == "unfilled")
+                    && matches!(&name_val.value, Expr::Lit(ExprLit{lit: Lit::Str(l), ..}) if l.value().eq_ignore_ascii_case("unfilled"))
                 {
                     style = GenStyle::Unfilled;
                     remove_idx = Some(idx);
@@ -156,12 +156,14 @@ impl CMap {
                 #vis struct #ident {
                     #(#names: ::std::mem::MaybeUninit<#types>,)*
                 }
+                #[allow(non_camel_case_types)]
                 #vis struct #state_ident<#(#generic_types),*>
                 where
                     #(#generic_types: ::certain_map::MaybeAvailable,)*
                 {
                     #(#names: ::std::marker::PhantomData<#generic_types>,)*
                 }
+                #[allow(non_camel_case_types)]
                 #[repr(transparent)]
                 #vis struct #handler_ident<'a, #(#generic_types),*>
                 where
@@ -194,6 +196,7 @@ impl CMap {
         let clone_with = if derive_clone {
             quote_spanned! {
                 self.span =>
+                    #[allow(non_camel_case_types)]
                     unsafe fn clone_with<#(#generic_types),*>(&self, _state: &#state_ident<#(#generic_types),*>) -> Self
                     where
                         #(#generic_types: ::certain_map::MaybeAvailable,)*
@@ -250,6 +253,7 @@ impl CMap {
         // impl #state_ident
         tokens.extend(quote_spanned! {
             self.span =>
+                #[allow(non_camel_case_types)]
                 impl<#(#generic_types),*> #state_ident<#(#generic_types),*>
                 where
                     #(#generic_types: ::certain_map::MaybeAvailable,)*
@@ -269,6 +273,7 @@ impl CMap {
                         }
                     }
                 }
+                #[allow(non_camel_case_types)]
                 impl<#(#generic_types),*> ::certain_map::Attach<#ident> for #state_ident<#(#generic_types),*>
                 where
                     #(#generic_types: ::certain_map::MaybeAvailable,)*
@@ -285,7 +290,8 @@ impl CMap {
             // impl #handler_ident
             tokens.extend(quote_spanned! {
                 self.span =>
-                    impl<'a, #(#generic_types),*> #handler_ident<'a, #(#generic_types),*>
+                    #[allow(non_camel_case_types)]
+                    impl<#(#generic_types),*> #handler_ident<'_, #(#generic_types),*>
                     where
                         #(#generic_types: ::certain_map::MaybeAvailable,)*
                     {
@@ -296,7 +302,8 @@ impl CMap {
                             (inner, #state_ident::new())
                         }
                     }
-                    impl<'a, #(#generic_types),*> ::certain_map::Fork for #handler_ident<'a, #(#generic_types),*>
+                    #[allow(non_camel_case_types)]
+                    impl<#(#generic_types),*> ::certain_map::Fork for #handler_ident<'_, #(#generic_types),*>
                     where
                         #(#generic_types: ::certain_map::MaybeAvailable,)*
                     {
@@ -313,6 +320,7 @@ impl CMap {
         // impl Drop for #handler_ident
         tokens.extend(quote_spanned! {
             self.span =>
+                #[allow(non_camel_case_types)]
                 impl<#(#generic_types),*> Drop for #handler_ident<'_, #(#generic_types),*>
                 where
                     #(#generic_types: ::certain_map::MaybeAvailable,)*
@@ -338,6 +346,7 @@ impl CMap {
                 ReplaceIter::new(generic_types.iter(), idx, &vacancy);
             tokens.extend(quote_spanned! {
                 self.span =>
+                    #[allow(non_camel_case_types)]
                     impl<#(#generic_types),*> ::certain_map::ParamRef<#ty> for #handler_ident<'_, #(#generic_types),*>
                     where
                         #generic_type: ::certain_map::Available,
@@ -348,6 +357,7 @@ impl CMap {
                             unsafe { #generic_type::do_ref(&self.inner.#name) }
                         }
                     }
+                    #[allow(non_camel_case_types)]
                     impl<#(#generic_types),*> ::certain_map::ParamMut<#ty> for #handler_ident<'_, #(#generic_types),*>
                     where
                         #generic_type: ::certain_map::Available,
@@ -358,6 +368,7 @@ impl CMap {
                             unsafe { #generic_type::do_mut(&mut self.inner.#name) }
                         }
                     }
+                    #[allow(non_camel_case_types)]
                     impl<'a, #(#generic_types),*> ::certain_map::ParamTake<#ty> for #handler_ident<'a, #(#generic_types),*>
                     where
                         #generic_type: ::certain_map::Available,
@@ -366,7 +377,7 @@ impl CMap {
                         type Transformed = #handler_ident<'a, #(#generic_types_replaced_vacancy),*>;
                         #[inline]
                         fn param_take(self) -> (Self::Transformed, #ty) {
-                            let item = unsafe { #generic_type::do_take(&mut self.inner.#name) };
+                            let item = unsafe { #generic_type::do_take(&self.inner.#name) };
                             #[allow(clippy::missing_transmute_annotations)]
                             (unsafe { ::std::mem::transmute(self) }, item)
                         }
@@ -388,6 +399,7 @@ impl CMap {
                 ReplaceIter::new(generic_types.iter(), idx, &vacancy);
             tokens.extend(quote_spanned! {
                 self.span =>
+                    #[allow(non_camel_case_types)]
                     impl<#(#generic_types),*> ::certain_map::ParamMaybeRef<#ty> for #handler_ident<'_, #(#generic_types),*>
                     where
                         #(#generic_types: ::certain_map::MaybeAvailable,)*
@@ -397,6 +409,7 @@ impl CMap {
                             unsafe { #generic_type::do_maybe_ref(&self.inner.#name) }
                         }
                     }
+                    #[allow(non_camel_case_types)]
                     impl<#(#generic_types),*> ::certain_map::ParamMaybeMut<#ty> for #handler_ident<'_, #(#generic_types),*>
                     where
                         #(#generic_types: ::certain_map::MaybeAvailable,)*
@@ -406,6 +419,7 @@ impl CMap {
                             unsafe { #generic_type::do_maybe_mut(&mut self.inner.#name) }
                         }
                     }
+                    #[allow(non_camel_case_types)]
                     impl<'a, #(#generic_types),*> ::certain_map::ParamSet<#ty> for #handler_ident<'a, #(#generic_types),*>
                     where
                         #(#generic_types: ::certain_map::MaybeAvailable,)*
@@ -420,6 +434,7 @@ impl CMap {
                             }
                         }
                     }
+                    #[allow(non_camel_case_types)]
                     impl<'a, #(#generic_types),*> ::certain_map::ParamRemove<#ty> for #handler_ident<'a, #(#generic_types),*>
                     where
                         #(#generic_types: ::certain_map::MaybeAvailable,)*
@@ -453,6 +468,7 @@ impl CMap {
                 let generic_types_rest = IgnoreIter::new(generic_types.iter(), idx);
                 tokens.extend(quote_spanned! {
                     self.span =>
+                        #[allow(non_camel_case_types)]
                         impl<#(#generic_types),*> ::certain_map::Param<#ty> for #handler_ident<'_, #(#generic_types),*>
                         where
                             #generic_type: ::certain_map::Available,
@@ -463,6 +479,7 @@ impl CMap {
                                 unsafe { #generic_type::do_read(&self.inner.#name) }
                             }
                         }
+                        #[allow(non_camel_case_types)]
                         impl<#(#generic_types),*> ::certain_map::Param<Option<#ty>> for #handler_ident<'_, #(#generic_types),*>
                         where
                             #(#generic_types: ::certain_map::MaybeAvailable,)*
